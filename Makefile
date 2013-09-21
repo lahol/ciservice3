@@ -12,6 +12,7 @@ APPNAME := ciservice
 
 CFLAGS += -DVERSION=\"${VERSION}\"
 CFLAGS += -DAPPNAME=\"${APPNAME}\"
+CFLAGS += -DSYSCONFIGDIR=\"/etc\"
 
 src = $(wildcard *.c)
 obj = $(src:.c=.o)
