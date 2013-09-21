@@ -1,0 +1,10 @@
+[General]
+pidfile = ciservice.pid
+
+[Server]
+host=localhost
+port=63690
+
+[Services]
+mail = ./mailscript.sh -n ${number} -a ${area} -A ${areacode} -N ${name} -t ${time} -m ${msn} -r ${alias}
+test = ./testscript.sh -n ${number} -a ${area} -A ${areacode} -N ${name} -t ${time} -m ${msn} -r ${alias}

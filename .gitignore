@@ -1,0 +1,5 @@
+ciservice
+*.o
+*.log
+*.pid
+.clang_complete
