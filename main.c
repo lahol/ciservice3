@@ -59,6 +59,9 @@ void ci_main_handle_message(CINetMsg *msg)
 
 int main(int argc, char **argv)
 {
+#if !GLIB_CHECK_VERSION(2,36,0)
+    g_type_init();
+#endif
     if (!ci_config_load(&argc, &argv))
         return 1;
 
