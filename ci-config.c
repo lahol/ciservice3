@@ -14,6 +14,8 @@ struct {
     gboolean daemonize;
 } ci_config;
 
+void ci_config_set_defaults(gboolean overwrite);
+
 gboolean ci_config_option_add_command(const gchar *option_name,
                                       const gchar *value,
                                       gpointer data,
@@ -149,11 +151,22 @@ gboolean ci_config_load(int *argc, char ***argv)
             ci_service_set_active(service, TRUE);
     }
 
-    /* otherwise we have no way to determine if this interval was set by command line or keyfile */
-    if (ci_config.retry_interval < 0)
+    ci_config_set_defaults(FALSE);
+    return TRUE;
+}
+
+void ci_config_set_defaults(gboolean overwrite)
+{
+    if (ci_config.retry_interval < 0 || overwrite)
         ci_config.retry_interval = 10;
 
-    return TRUE;
+    if (ci_config.hostname == NULL || overwrite) {
+        g_free(ci_config.hostname);
+        ci_config.hostname = g_strdup("localhost");
+    }
+
+    if (ci_config.port == 0 || overwrite)
+        ci_config.port = 63690;
 }
 
 void ci_config_cleanup(void)
