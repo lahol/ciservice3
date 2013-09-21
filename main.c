@@ -15,7 +15,6 @@ gboolean ci_main_handle_signal(GMainLoop *mainloop)
 
 void ci_main_cleanup(gboolean full)
 {
-    fprintf(stderr, "cleaning up\n");
     ci_config_cleanup();
     ci_service_cleanup();
 
@@ -31,12 +30,21 @@ void ci_main_cleanup(gboolean full)
 
 void ci_main_list_services(void)
 {
-    fprintf(stderr, "list services\n");
+    GList *services = ci_service_list_services();
+    GList *tmp;
+    const gchar *id;
+    for (tmp = services; tmp != NULL; tmp = g_list_next(tmp)) {
+        id = ci_service_get_identifier((CIService *)tmp->data);
+        fprintf(stdout, "%s: %s\n", id ? id : "<cmdline>",
+                ci_service_get_active((CIService *)tmp->data) ? "active" : "sleeping");
+    }
+
+    g_list_free(services);
 }
 
 void ci_main_print_version(void)
 {
-    fprintf(stderr, "print version\n");
+    fprintf(stdout, "%s - %s\n", APPNAME, VERSION);
 }
 
 void ci_main_handle_message(CINetMsg *msg)

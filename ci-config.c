@@ -115,7 +115,7 @@ gboolean ci_config_load(int *argc, char ***argv)
             "Hostname of the server.", NULL },
         { "port", 'p', 0, G_OPTION_ARG_INT, &ci_config.port,
             "Port of the server.", NULL },
-        { "retry-interval", 'r', 0, G_OPTION_ARG_INT, ci_config.retry_interval,
+        { "retry-interval", 'r', 0, G_OPTION_ARG_INT, &ci_config.retry_interval,
             "Retry interval in seconds if connection is lost.", NULL },
         { "command", 'c', 0, G_OPTION_ARG_CALLBACK, ci_config_option_add_command,
             "Command to execute.", NULL },
