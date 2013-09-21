@@ -54,7 +54,6 @@ gchar *ci_config_get_config_file(void)
 
     for (i = 0; cfgdirs[i] != NULL; ++i) {
         filename = g_build_filename(cfgdirs[i], "ciservicerc", NULL);
-        fprintf(stderr, "check %s\n", filename);
         if (g_file_test(filename, G_FILE_TEST_IS_REGULAR))
             return filename;
         g_free(filename);
@@ -82,6 +81,8 @@ gboolean ci_config_load_file(void)
         ci_config.hostname = g_key_file_get_string(keyfile, "Server", "host", NULL);
     if (ci_config.port == 0)
         ci_config.port = g_key_file_get_integer(keyfile, "Server", "port", NULL);
+    if (ci_config.retry_interval < 0 && g_key_file_has_key(keyfile, "Server", "retry-interval", NULL))
+        ci_config.retry_interval = g_key_file_get_integer(keyfile, "Server", "retry-interval", NULL);
 
     /* get services */
     gchar **services = g_key_file_get_keys(keyfile, "Services", NULL, NULL);
@@ -103,7 +104,7 @@ gboolean ci_config_load_file(void)
 
 gboolean ci_config_load(int *argc, char ***argv)
 {
-    ci_config.retry_interval = 10;
+    ci_config.retry_interval = -1;
     GOptionEntry cmdline_options[] = {
         { "version", 'v', 0, G_OPTION_ARG_NONE, &ci_config.print_version,
             "Print version and exit.", NULL },
@@ -147,6 +148,10 @@ gboolean ci_config_load(int *argc, char ***argv)
         else
             ci_service_set_active(service, TRUE);
     }
+
+    /* otherwise we have no way to determine if this interval was set by command line or keyfile */
+    if (ci_config.retry_interval < 0)
+        ci_config.retry_interval = 10;
 
     return TRUE;
 }
