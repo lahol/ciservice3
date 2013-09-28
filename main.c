@@ -1,4 +1,5 @@
 #include <glib.h>
+#include <glib-object.h>
 #include <glib-unix.h>
 #include <cinetmsgs.h>
 #include "ci-config.h"
