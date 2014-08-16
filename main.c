@@ -80,7 +80,7 @@ int main(int argc, char **argv)
     }
     if (ci_config_get("daemonize", &flag) && flag &&
             ci_config_get("pidfile", &pidfile)) {
-        daemon_pid = start_daemon(pidfile);
+        daemon_pid = start_daemon(argv[0], pidfile);
         g_free(pidfile);
 
         /* TODO: if daemon is already running, just add services via ipc-socket */
