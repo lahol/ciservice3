@@ -87,16 +87,36 @@ gboolean ci_config_load_file(void)
         ci_config.retry_interval = g_key_file_get_integer(keyfile, "Server", "retry-interval", NULL);
 
     /* get services */
-    gchar **services = g_key_file_get_keys(keyfile, "Services", NULL, NULL);
+    gchar **services = g_key_file_get_groups(keyfile, NULL);
 
     guint i;
+    CIService *service;
     gchar *cmd;
+    gint userid;
+    GError *err;
+
     if (services != NULL) {
         for (i = 0; services[i] != NULL; ++i) {
-            cmd = g_key_file_get_string(keyfile, "Services", services[i], NULL);
-            ci_service_add_service(services[i], cmd, FALSE);
-            g_free(cmd);
+            if (g_strcmp0(services[i], "General") != 0 &&
+                g_strcmp0(services[i], "Server") != 0) {
+                cmd = g_key_file_get_string(keyfile, services[i], "commandline", NULL);
+                if (cmd == NULL)
+                    continue;
+                service = ci_service_add_service(services[i], cmd, FALSE);
+                g_free(cmd);
+                if (service == NULL)
+                    continue;
+                err = NULL;
+                userid = g_key_file_get_integer(keyfile, services[i], "userid", &err);
+                if (!err) {
+                    ci_service_set_userid(service, userid);
+                }
+                else {
+                    g_error_free(err);
+                }
+            }
         }
+
         g_strfreev(services);
     }
 

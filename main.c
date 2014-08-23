@@ -52,13 +52,48 @@ void ci_main_print_version(void)
     fprintf(stdout, "%s - %s\n", APPNAME, VERSION);
 }
 
+struct _CIMainServiceQuery {
+    CIServiceQueryCompleteCallback complete_cb;
+    gpointer servicedata;
+};
+
+void ci_main_service_query_caller_reply_cb(CINetMsg *msg, struct _CIMainServiceQuery *querydata)
+{
+    /* run complete cb (msg gets freed by client lib), free querydata */
+    if (msg->msgtype != CI_NET_MSG_DB_GET_CALLER)
+        goto done;
+
+    gchar *name = g_strdup(((CINetMsgDbGetCaller*)msg)->caller.name);
+    if (querydata && querydata->complete_cb)
+        querydata->complete_cb(name, querydata->servicedata);
+    g_free(name);
+
+done:
+    g_free(querydata);
+}
+
+void ci_main_service_query_caller_cb(const gchar *completenumber, gint userid, gpointer userdata,
+                                     CIServiceQueryCompleteCallback complete_cb, gpointer servicedata)
+{
+    /* query data and pass callback via _CIMainServiceQuery to reply cb */
+    struct _CIMainServiceQuery *querydata = g_malloc0(sizeof(struct _CIMainServiceQuery));
+    querydata->complete_cb = complete_cb;
+    querydata->servicedata = servicedata;
+
+    ci_client_query(ci_client, CIClientQueryGetCaller,
+                    (CIQueryMsgCallback)ci_main_service_query_caller_reply_cb, (gpointer)querydata,
+                    "user", GINT_TO_POINTER(userid),
+                    "number", completenumber,
+                    NULL, NULL);
+}
+
 void ci_main_handle_message(CINetMsg *msg)
 {
     if (msg == NULL)
         return;
     if (msg->msgtype == CI_NET_MSG_EVENT_RING &&
             ((CINetMsgMultipart*)msg)->stage == MultipartStageComplete) {
-        ci_service_run_commands(&((CINetMsgEventRing*)msg)->callinfo);
+        ci_service_run_commands(&((CINetMsgEventRing*)msg)->callinfo, ci_main_service_query_caller_cb, NULL);
     }
 }
 

@@ -5,10 +5,12 @@
 struct CIService {
     gchar *identifier;
     gchar *command;
+    gint userid;
     gboolean active;
 };
 
 GList *ci_services = NULL;
+GRegex *ci_service_regex = NULL;
 
 void ci_service_run(const gchar *command);
 gboolean ci_service_regex_eval_cb(const GMatchInfo *info, GString *res, gpointer data);
@@ -34,18 +36,20 @@ gboolean ci_service_check_command(const gchar *commandline)
     return TRUE;
 }
 
-gboolean ci_service_add_service(const gchar *identifier, const gchar *commandline, gboolean active)
+CIService *ci_service_add_service(const gchar *identifier, const gchar *commandline, gboolean active)
 {
     if (!ci_service_check_command(commandline))
-        return FALSE;
+        return NULL;
 
     struct CIService *service = g_malloc0(sizeof(struct CIService));
     service->identifier = g_strdup(identifier);
     service->command = g_strdup(commandline);
     service->active = active;
+    service->userid = -1;
 
     ci_services = g_list_append(ci_services, service);
-    return TRUE;
+
+    return service;
 }
 
 GList *ci_service_list_services(void)
@@ -55,8 +59,8 @@ GList *ci_service_list_services(void)
 
 gint ci_service_compare_identifier(struct CIService *service, const gchar *identifier)
 {
-    if (service == NULL)
-        return -1;
+    g_return_val_if_fail(service != NULL, -1);
+
     return g_strcmp0(service->identifier, identifier);
 }
 
@@ -72,29 +76,44 @@ CIService *ci_service_get(const gchar *identifier)
 
 const gchar *ci_service_get_identifier(CIService *service)
 {
-    if (service == NULL)
-        return NULL;
+    g_return_val_if_fail(service != NULL, NULL);
+
     return service->identifier;
 }
 
 const gchar *ci_service_get_commandline(CIService *service)
 {
-    if (service == NULL)
-        return NULL;
+    g_return_val_if_fail(service != NULL, NULL);
+
     return service->command;
 }
 
 gboolean ci_service_get_active(CIService *service)
 {
-    if (service == NULL)
-        return FALSE;
+    g_return_val_if_fail(service != NULL, FALSE);
+
     return service->active;
 }
 
 void ci_service_set_active(CIService *service, gboolean active)
 {
-    if (service != NULL)
-        service->active = active;
+    g_return_if_fail(service != NULL);
+
+    service->active = active;
+}
+
+void ci_service_set_userid(CIService *service, gint userid)
+{
+    g_return_if_fail(service != NULL);
+
+    service->userid = userid;
+}
+
+gint ci_service_get_userid(CIService *service)
+{
+    g_return_val_if_fail(service != NULL, -1);
+
+    return service->userid;
 }
 
 gboolean ci_service_regex_eval_cb(const GMatchInfo *info, GString *res, gpointer data)
@@ -119,38 +138,79 @@ gboolean ci_service_regex_eval_cb(const GMatchInfo *info, GString *res, gpointer
     return FALSE;
 }
 
-void ci_service_run_commands(CICallInfo *callinfo)
+struct _CIServiceQuery {
+    CIService *service;
+    GHashTable *hashtable;
+};
+
+void ci_service_query_caller_complete_cb(const gchar *name, struct _CIServiceQuery *querydata)
+{
+    g_return_if_fail(querydata != NULL);
+    if (!querydata->service || !querydata->hashtable)
+        goto done;
+
+    gchar *name_bkup = g_strdup(g_hash_table_lookup(querydata->hashtable, "${name}"));
+    if (name && name[0]) {
+        g_hash_table_replace(querydata->hashtable, "${name}", g_strdup(name));
+    }
+
+    gchar *cmd = g_regex_replace_eval(ci_service_regex, querydata->service->command,
+            -1, 0, 0, ci_service_regex_eval_cb, querydata->hashtable, NULL);
+    ci_service_run(cmd);
+    g_free(cmd);
+
+    if (name && name[0]) {
+        g_hash_table_replace(querydata->hashtable, "${name}", name_bkup);
+    }
+done:
+    if (querydata->hashtable)
+        g_hash_table_unref(querydata->hashtable);
+    g_free(querydata);
+}
+
+void ci_service_run_commands(CICallInfo *callinfo, CIServiceQueryCallerCallback query_caller_cb, gpointer userdata)
 {
     if (ci_services == NULL || callinfo == NULL)
         return;
 
     gchar buffer[64];
-    GHashTable *hashtable = g_hash_table_new(g_str_hash, g_str_equal);
-    g_hash_table_insert(hashtable, "${number}", callinfo->number);
-    g_hash_table_insert(hashtable, "${areacode}", callinfo->areacode);
-    g_hash_table_insert(hashtable, "${area}", callinfo->area);
-    g_hash_table_insert(hashtable, "${name}", callinfo->name);
+    GHashTable *hashtable = g_hash_table_new_full(g_str_hash, g_str_equal, NULL, g_free);
+    g_hash_table_insert(hashtable, "${number}", g_strdup(callinfo->number));
+    g_hash_table_insert(hashtable, "${areacode}", g_strdup(callinfo->areacode));
+    g_hash_table_insert(hashtable, "${area}", g_strdup(callinfo->area));
+    g_hash_table_insert(hashtable, "${name}", g_strdup(callinfo->name));
     snprintf(buffer, 32, "%s %s", callinfo->date, callinfo->time);
-    g_hash_table_insert(hashtable, "${time}", callinfo->time);
-    g_hash_table_insert(hashtable, "${msn}", callinfo->msn);
-    g_hash_table_insert(hashtable, "${alias}", callinfo->alias);
-    g_hash_table_insert(hashtable, "${completenumber}", callinfo->completenumber);
+    g_hash_table_insert(hashtable, "${time}", g_strdup(callinfo->time));
+    g_hash_table_insert(hashtable, "${msn}", g_strdup(callinfo->msn));
+    g_hash_table_insert(hashtable, "${alias}", g_strdup(callinfo->alias));
+    g_hash_table_insert(hashtable, "${completenumber}", g_strdup(callinfo->completenumber));
 
-    GRegex *regex = g_regex_new("\\${number}|\\${areacode}|\\${area}|\\${name}|\\${time}|\\${msn}|\\${alias}|\\${completenumber}",
-            G_REGEX_RAW, 0, NULL);
+    if (G_UNLIKELY(ci_service_regex == NULL)) {
+        ci_service_regex =
+            g_regex_new("\\${number}|\\${areacode}|\\${area}|\\${name}|\\${time}|\\${msn}|\\${alias}|\\${completenumber}",
+                        G_REGEX_RAW, 0, NULL);
+    }
 
     GList *tmp;
-    gchar *cmd;
+    struct _CIServiceQuery *querydata;
     for (tmp = ci_services; tmp != NULL; tmp = g_list_next(tmp)) {
         if (((struct CIService *)tmp->data)->active) {
-            cmd = g_regex_replace_eval(regex, ((struct CIService *)tmp->data)->command,
-                    -1, 0, 0, ci_service_regex_eval_cb, hashtable, NULL);
-            ci_service_run(cmd);
-            g_free(cmd);
+            querydata = g_malloc0(sizeof(struct _CIServiceQuery));
+            querydata->service = (struct CIService *)tmp->data;
+            querydata->hashtable = hashtable;
+            g_hash_table_ref(hashtable);
+            if (((struct CIService *)tmp->data)->userid != -1 &&
+                    query_caller_cb) {
+                query_caller_cb(callinfo->completenumber, ((struct CIService *)tmp->data)->userid, userdata,
+                        (CIServiceQueryCompleteCallback)ci_service_query_caller_complete_cb, querydata);
+            }
+            else {
+                ci_service_query_caller_complete_cb(NULL, querydata);
+            }
         }
     }
 
-    g_hash_table_destroy(hashtable);
+    g_hash_table_unref(hashtable);
 }
 
 void ci_service_free(struct CIService *service)
@@ -165,6 +225,8 @@ void ci_service_free(struct CIService *service)
 void ci_service_cleanup(void)
 {
     g_list_free_full(ci_services, (GDestroyNotify)ci_service_free);
+    if (ci_service_regex)
+        g_regex_unref(ci_service_regex);
 }
 
 void ci_service_run(const gchar *command)
