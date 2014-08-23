@@ -3,10 +3,12 @@
 #include <glib-unix.h>
 #include <cinetmsgs.h>
 #include "ci-config.h"
-#include "ci-client.h"
+#include <ci-client.h>
 #include "ci-service.h"
 #include "daemon.h"
 #include <stdio.h>
+
+CIClient *ci_client = NULL;
 
 gboolean ci_main_handle_signal(GMainLoop *mainloop)
 {
@@ -23,8 +25,10 @@ void ci_main_cleanup(gboolean full)
     if (!full)
         return;
 
-    ci_client_disconnect();
-    ci_client_cleanup();
+    if (ci_client != NULL) {
+        ci_client_disconnect(ci_client);
+        ci_client_shutdown(ci_client);
+    }
 
     stop_daemon();
 }
@@ -96,7 +100,18 @@ int main(int argc, char **argv)
         }
     }
 
-    ci_client_init(ci_main_handle_message);
+    gchar *host = NULL;
+    guint port;
+    gint retry_interval;
+
+    ci_config_get("hostname", &host);
+    ci_config_get("port", &port);
+    ci_config_get("retry-interval", &retry_interval);
+
+    ci_client = ci_client_new_full(host, port, ci_main_handle_message, NULL);
+    ci_client_set_retry_interval(ci_client, retry_interval);
+
+    ci_client_connect(ci_client);
 
     GMainLoop *mainloop = g_main_loop_new(NULL, FALSE);
 

@@ -2,7 +2,7 @@ CC = gcc
 PKG_CONFIG = pkg-config
 
 CFLAGS = -Wall -g `$(PKG_CONFIG) --cflags glib-2.0 gio-2.0`
-LIBS = `$(PKG_CONFIG) --libs glib-2.0 gio-2.0` -lcinet
+LIBS = `$(PKG_CONFIG) --libs glib-2.0 gio-2.0` -lcinet -lciclient
 
 PREFIX = /usr
 
