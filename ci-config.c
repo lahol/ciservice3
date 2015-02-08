@@ -121,6 +121,8 @@ gboolean ci_config_load_file(void)
     }
 
     g_key_file_free(keyfile);
+    g_free(cfgfile);
+
     return TRUE;
 }
 
